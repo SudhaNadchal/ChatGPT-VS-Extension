@@ -1,20 +1,18 @@
-﻿using Microsoft.VisualStudio.Shell;
+﻿using EnvDTE;
+using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 using System;
 using System.ComponentModel.Design;
-using System.Globalization;
-using System.Threading;
-using System.Threading.Tasks;
+using System.Net.Http;
+using System.Text;
 using Task = System.Threading.Tasks.Task;
-using EnvDTE;
-using Microsoft.VisualStudio.Text;
 
 namespace CodeNarrator
 {
     /// <summary>
     /// Command handler
     /// </summary>
-    internal sealed class Command1
+    internal sealed class Narrator
     {
         /// <summary>
         /// Command ID.
@@ -32,12 +30,12 @@ namespace CodeNarrator
         private readonly AsyncPackage package;
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="Command1"/> class.
+        /// Initializes a new instance of the <see cref="Narrator"/> class.
         /// Adds our command handlers for menu (commands must exist in the command table file)
         /// </summary>
         /// <param name="package">Owner package, not null.</param>
         /// <param name="commandService">Command service to add command to, not null.</param>
-        private Command1(AsyncPackage package, OleMenuCommandService commandService)
+        private Narrator(AsyncPackage package, OleMenuCommandService commandService)
         {
             this.package = package ?? throw new ArgumentNullException(nameof(package));
             commandService = commandService ?? throw new ArgumentNullException(nameof(commandService));
@@ -50,7 +48,7 @@ namespace CodeNarrator
         /// <summary>
         /// Gets the instance of the command.
         /// </summary>
-        public static Command1 Instance
+        public static Narrator Instance
         {
             get;
             private set;
@@ -78,7 +76,7 @@ namespace CodeNarrator
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(package.DisposalToken);
 
             OleMenuCommandService commandService = await package.GetServiceAsync(typeof(IMenuCommandService)) as OleMenuCommandService;
-            Instance = new Command1(package, commandService);
+            Instance = new Narrator(package, commandService);
         }
 
         /// <summary>
@@ -95,17 +93,41 @@ namespace CodeNarrator
             DTE dte = (DTE)Package.GetGlobalService(typeof(DTE));
 
             TextSelection selection = dte.ActiveDocument.Selection as TextSelection;
-            string message = selection.Text;
-            string title = "Hello World!";
+            selection.SelectLine();
+            string title = "This is what the code does:";
 
-            // Show a message box to prove we were here
-            VsShellUtilities.ShowMessageBox(
-                this.package,
-                message,
-                title,
-                OLEMSGICON.OLEMSGICON_INFO,
-                OLEMSGBUTTON.OLEMSGBUTTON_OK,
-                OLEMSGDEFBUTTON.OLEMSGDEFBUTTON_FIRST);
+            string endpoint = "https://api.chatgpt.com/prompt";
+
+            // replace with the text prompt you want to send to the model
+            string prompt = selection.Text;
+
+            // create an HTTP client
+            using (var client = new HttpClient())
+            {
+                client.DefaultRequestHeaders.Add("Api-Key", Environment.GetEnvironmentVariable("OPENAI_API_KEY"));
+                client.DefaultRequestHeaders.Add("Accept", "application/json");
+                client.DefaultRequestHeaders.Add("Content-Type", "application/json");
+                // set the content of the request to be the prompt text
+                var content = new StringContent(prompt, Encoding.UTF8, "application/json");
+
+                // make a POST request to the /prompt endpoint
+                var response = client.PostAsync(endpoint, content).Result;
+
+                // read the response content as a string
+                var responseContent = response.Content.ReadAsStringAsync().Result;
+
+                // print the response
+                Console.WriteLine(responseContent);
+
+               // Show a message box to prove we were here
+               VsShellUtilities.ShowMessageBox(
+               this.package,
+               responseContent,
+               title,
+               OLEMSGICON.OLEMSGICON_INFO,
+               OLEMSGBUTTON.OLEMSGBUTTON_OK,
+               OLEMSGDEFBUTTON.OLEMSGDEFBUTTON_FIRST);
+            }
         }
     }
 }
